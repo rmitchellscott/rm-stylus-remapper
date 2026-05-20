@@ -4,6 +4,7 @@
 [![rmpp](https://img.shields.io/badge/rMPP-supported-green)](https://remarkable.com/store/overview/remarkable-paper-pro)
 [![rmppmove](https://img.shields.io/badge/rMPPMove-supported-green)](https://remarkable.com/products/remarkable-paper/pro-move)
 [![rmppure](https://img.shields.io/badge/rMPPure-supported-green)](https://remarkable.com/products/remarkable-paper/pure)
+[![vellum](https://img.shields.io/badge/vellum-stylus--remapper-purple)](https://vellum.delivery/#/package/stylus-remapper/)
 <img src="assets/stylus-remapper.svg" alt="stylus-remapper Icon" width="125" align="right">
 <p align="justify">
 
