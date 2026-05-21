@@ -188,6 +188,10 @@ type config struct {
 	PressureGamma float64  `json:"pressure-gamma"`
 	OffsetX       int      `json:"offset-x"`
 	OffsetY       int      `json:"offset-y"`
+	OffsetXPixels   *float64 `json:"offset-x-pixels,omitempty"`
+	OffsetYPixels   *float64 `json:"offset-y-pixels,omitempty"`
+	ScreenWidth     *int     `json:"screen-width,omitempty"`
+	ScreenHeight    *int     `json:"screen-height,omitempty"`
 	Mappings      []string `json:"mappings"`
 }
 
@@ -226,11 +230,30 @@ type runtimeConfig struct {
 	offsetY     int32
 }
 
-func buildRuntimeConfig(cfg config, pressureMax int32) (*runtimeConfig, error) {
+type screenInfo struct {
+	absMaxX int32
+	absMaxY int32
+}
+
+func getScreenInfo(absRange map[uint16]absInfo) screenInfo {
+	return screenInfo{
+		absMaxX: absRange[ABS_X].Maximum,
+		absMaxY: absRange[ABS_Y].Maximum,
+	}
+}
+
+func buildRuntimeConfig(cfg config, pressureMax int32, screen screenInfo) (*runtimeConfig, error) {
 	rc := &runtimeConfig{
 		remapTable: make(map[uint16]uint16),
 		offsetX:    int32(cfg.OffsetX),
 		offsetY:    int32(cfg.OffsetY),
+	}
+
+	if cfg.OffsetXPixels != nil && cfg.ScreenWidth != nil && *cfg.ScreenWidth > 0 && screen.absMaxX > 0 {
+		rc.offsetX = int32(math.Round(*cfg.OffsetXPixels * float64(screen.absMaxX) / float64(*cfg.ScreenWidth)))
+	}
+	if cfg.OffsetYPixels != nil && cfg.ScreenHeight != nil && *cfg.ScreenHeight > 0 && screen.absMaxY > 0 {
+		rc.offsetY = int32(math.Round(*cfg.OffsetYPixels * float64(screen.absMaxY) / float64(*cfg.ScreenHeight)))
 	}
 
 	for _, m := range cfg.Mappings {
@@ -253,7 +276,7 @@ func buildRuntimeConfig(cfg config, pressureMax int32) (*runtimeConfig, error) {
 	return rc, nil
 }
 
-func watchConfig(path string, pressureMax int32, rtCfg *atomic.Pointer[runtimeConfig]) {
+func watchConfig(path string, pressureMax int32, screen screenInfo, rtCfg *atomic.Pointer[runtimeConfig]) {
 	dir := filepath.Dir(path)
 
 	watcher, err := fsnotify.NewWatcher()
@@ -287,7 +310,7 @@ func watchConfig(path string, pressureMax int32, rtCfg *atomic.Pointer[runtimeCo
 				fmt.Fprintf(os.Stderr, "config reload error: %v\n", err)
 				continue
 			}
-			rc, err := buildRuntimeConfig(cfg, pressureMax)
+			rc, err := buildRuntimeConfig(cfg, pressureMax, screen)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "config reload error: %v\n", err)
 				continue
@@ -472,6 +495,8 @@ func main() {
 		setupUinputAbs(uifd, axis, ai)
 	}
 	pressureMax := absRange[ABS_PRESSURE].Maximum
+	screen := getScreenInfo(absRange)
+	logv("abs max: %dx%d", screen.absMaxX, screen.absMaxY)
 
 	initialCfg := config{
 		PressureGamma: pressureGamma,
@@ -479,7 +504,7 @@ func main() {
 		OffsetY:       offsetY,
 		Mappings:      mappings,
 	}
-	rc, err := buildRuntimeConfig(initialCfg, pressureMax)
+	rc, err := buildRuntimeConfig(initialCfg, pressureMax, screen)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -490,7 +515,7 @@ func main() {
 	logv("offset x: %d, y: %d", offsetX, offsetY)
 	logv("mappings: %v", mappings)
 
-	go watchConfig(configPath, pressureMax, &rtCfg)
+	go watchConfig(configPath, pressureMax, screen, &rtCfg)
 
 	devName := getDeviceName(evfd)
 	devID := getDeviceID(evfd)
