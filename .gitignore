@@ -7,6 +7,6 @@
 *.out
 .DS_Store
 dist/
+qmd/source/
 /stylus-remapper
 /stylus-remapper-*
-qmd/.source/

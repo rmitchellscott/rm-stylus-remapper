@@ -362,6 +362,8 @@ func writeAll(fd int, data []byte) error {
 }
 
 func main() {
+	signal.Ignore(unix.SIGHUP)
+
 	var (
 		devPath       string
 		configPath    string
@@ -429,6 +431,8 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	unix.Unmount(devPath, unix.MNT_DETACH)
 
 	evfd, err := openRealDevice(devPath)
 	if err != nil {
