@@ -228,32 +228,45 @@ type runtimeConfig struct {
 	pressureLUT []int32
 	offsetX     int32
 	offsetY     int32
+	axesSwapped bool
 }
 
 type screenInfo struct {
-	absMaxX int32
-	absMaxY int32
+	absMaxX   int32
+	absMaxY   int32
+	axesSwapped bool
 }
 
 func getScreenInfo(absRange map[uint16]absInfo) screenInfo {
+	mx := absRange[ABS_X].Maximum
+	my := absRange[ABS_Y].Maximum
 	return screenInfo{
-		absMaxX: absRange[ABS_X].Maximum,
-		absMaxY: absRange[ABS_Y].Maximum,
+		absMaxX:     mx,
+		absMaxY:     my,
+		axesSwapped: mx > my,
 	}
 }
 
 func buildRuntimeConfig(cfg config, pressureMax int32, screen screenInfo) (*runtimeConfig, error) {
 	rc := &runtimeConfig{
-		remapTable: make(map[uint16]uint16),
-		offsetX:    int32(cfg.OffsetX),
-		offsetY:    int32(cfg.OffsetY),
+		remapTable:  make(map[uint16]uint16),
+		offsetX:     int32(cfg.OffsetX),
+		offsetY:     int32(cfg.OffsetY),
+		axesSwapped: screen.axesSwapped,
 	}
 
-	if cfg.OffsetXPixels != nil && cfg.ScreenWidth != nil && *cfg.ScreenWidth > 0 && screen.absMaxX > 0 {
-		rc.offsetX = int32(math.Round(*cfg.OffsetXPixels * float64(screen.absMaxX) / float64(*cfg.ScreenWidth)))
+	hRange := screen.absMaxX
+	vRange := screen.absMaxY
+	if screen.axesSwapped {
+		hRange = screen.absMaxY
+		vRange = screen.absMaxX
 	}
-	if cfg.OffsetYPixels != nil && cfg.ScreenHeight != nil && *cfg.ScreenHeight > 0 && screen.absMaxY > 0 {
-		rc.offsetY = int32(math.Round(*cfg.OffsetYPixels * float64(screen.absMaxY) / float64(*cfg.ScreenHeight)))
+
+	if cfg.OffsetXPixels != nil && cfg.ScreenWidth != nil && *cfg.ScreenWidth > 0 && hRange > 0 {
+		rc.offsetX = int32(math.Round(*cfg.OffsetXPixels * float64(hRange) / float64(*cfg.ScreenWidth)))
+	}
+	if cfg.OffsetYPixels != nil && cfg.ScreenHeight != nil && *cfg.ScreenHeight > 0 && vRange > 0 {
+		rc.offsetY = int32(math.Round(*cfg.OffsetYPixels * float64(vRange) / float64(*cfg.ScreenHeight)))
 	}
 
 	for _, m := range cfg.Mappings {
@@ -496,7 +509,7 @@ func main() {
 	}
 	pressureMax := absRange[ABS_PRESSURE].Maximum
 	screen := getScreenInfo(absRange)
-	logv("abs max: %dx%d", screen.absMaxX, screen.absMaxY)
+	logv("abs max: %dx%d (axes swapped: %v)", screen.absMaxX, screen.absMaxY, screen.axesSwapped)
 
 	initialCfg := config{
 		PressureGamma: pressureGamma,
@@ -601,6 +614,12 @@ func main() {
 			offset := cfg.offsetX
 			if ev.Code == ABS_Y {
 				offset = cfg.offsetY
+			}
+			if cfg.axesSwapped {
+				offset = cfg.offsetY
+				if ev.Code == ABS_Y {
+					offset = cfg.offsetX
+				}
 			}
 			if offset != 0 {
 				ai := absRange[ev.Code]
